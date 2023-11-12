@@ -1,0 +1,19 @@
+{
+    "name": "imps-server",
+    "version": "0.1.0",
+    "description": "The server code for Imps",
+    "main": "build/index.js",
+    "scripts": {
+        "build": "tsc",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "author": "Nakama Authors & Contributors",
+    "license": "Apache-2.0",
+    "devDependencies": {
+        "typescript": "^5.2.2"
+    },
+    "dependencies": {
+        "nakama-runtime": "github:heroiclabs/nakama-common"
+    },
+    "keywords": []
+}
