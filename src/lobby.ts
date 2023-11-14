@@ -281,6 +281,18 @@ const MatchSignal: nkruntime.MatchSignalFunction<LobbyMatchState>= function (ctx
 };
 
 const CreateLobbyMatchRpc: nkruntime.RpcFunction = function (ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkruntime.Nakama, payload: string) {
+    fetch(
+        "https://localhost:7152/gameserver",
+        {
+            method: "POST",
+            cache: "no-cache",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            redirect: "follow",
+            body: JSON.stringify({ matchId: "300" }), // body data type must match "Content-Type" header
+        });
+
     // Assume the match will be public by default
     let isPrivate = "false";
     let matchName = `Play with ${ctx.username}`;

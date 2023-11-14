@@ -1,4 +1,3 @@
-"use strict";
 function InitModule(ctx, logger, nk, initializer) {
     initializer.registerMatch("LobbyMatch", {
         matchInit: MatchInit,
@@ -225,6 +224,15 @@ var MatchSignal = function (ctx, logger, nk, dispatcher, tick, state, data) {
     };
 };
 var CreateLobbyMatchRpc = function (ctx, logger, nk, payload) {
+    fetch("https://localhost:7152/gameserver", {
+        method: "POST",
+        cache: "no-cache",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        redirect: "follow",
+        body: JSON.stringify({ matchId: "300" }),
+    });
     var isPrivate = "false";
     var matchName = "Play with ".concat(ctx.username);
     var users = nk.usersGetId([ctx.userId]);

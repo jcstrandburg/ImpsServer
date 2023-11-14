@@ -1,5 +1,6 @@
 {
     "name": "imps-server",
+    "type": "module",
     "version": "0.1.0",
     "description": "The server code for Imps",
     "main": "build/index.js",
@@ -10,9 +11,11 @@
     "author": "Nakama Authors & Contributors",
     "license": "Apache-2.0",
     "devDependencies": {
+        "@types/node": "^20.9.0",
         "typescript": "^5.2.2"
     },
     "dependencies": {
+        "axios": "^1.6.1",
         "nakama-runtime": "github:heroiclabs/nakama-common"
     },
     "keywords": []
