@@ -1,14 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
+	"io/ioutil"
+	"net/http"
 	"strconv"
 
 	"context"
-
-	// "github.com/heroiclabs/nakama-common/api"
-	// "github.com/heroiclabs/nakama-common/rtapi"
 	"sort"
 
 	"github.com/heroiclabs/nakama-common/api"
@@ -38,6 +38,7 @@ type LobbyMatchState struct {
 	AllowedObservers    int
 	MatchName           string
 	CanJoin             bool
+	MatchId             string
 }
 
 type PlayerState struct {
@@ -50,10 +51,10 @@ type PlayerState struct {
 }
 
 const (
-	WaitingForPlayers      GameState = iota
-	WaitingForPlayersReady GameState = iota
-	Launching              GameState = iota
-	InProgress             GameState = iota
+	WaitingForPlayers      GameState = 0
+	WaitingForPlayersReady GameState = 1
+	Launching              GameState = 2 // Get rid of this
+	InProgress             GameState = 3
 )
 
 func toJson(thing interface{}) string {
@@ -123,14 +124,51 @@ func broadcastLobbyUpdate(logger runtime.Logger, state *LobbyMatchState, dispatc
 		panic(err)
 	}
 	logger.Info(string(bytes))
-	dispatcher.BroadcastMessage(OP_LOBBY_UPDATE, bytes, nil, nil, true)
+
+	err = dispatcher.BroadcastMessage(OP_LOBBY_UPDATE, bytes, nil, nil, true)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func broadcastGameStarted(logger runtime.Logger, state *LobbyMatchState, dispatcher runtime.MatchDispatcher, responseBytes []byte) {
+	err := dispatcher.BroadcastMessage(OP_GAME_START, responseBytes, nil, nil, true)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func spinUpServer(matchId string) ([]byte, error) {
+	jsonBytes, err := json.Marshal(map[string]interface{}{"matchId": matchId})
+	if err != nil {
+		return nil, err
+	}
+
+	address := "http://172.21.214.52:5000/GameServer"
+	address = "http://localhost:5000/GameServer"
+	resp, err := http.Post(address, "application/json", bytes.NewBuffer(jsonBytes))
+	if err != nil {
+		println("Error during post")
+		return nil, err
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return body, nil
 }
 
 func (m *LobbyMatch) MatchInit(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, params map[string]interface{}) (interface{}, int, string) {
 	isPrivate := false
+	matchName := ""
 
 	if val, ok := params["isPrivate"]; ok {
 		isPrivate = val.(bool)
+	}
+	if val, ok := params["matchName"]; ok {
+		matchName = val.(string)
 	}
 
 	state := &LobbyMatchState{
@@ -140,6 +178,9 @@ func (m *LobbyMatch) MatchInit(ctx context.Context, logger runtime.Logger, db *s
 		IsPrivate:           isPrivate,
 		GameState:           WaitingForPlayers,
 		EmptyTicks:          0,
+		CanJoin:             true,
+		MatchName:           matchName,
+		MatchId:             ctx.Value(runtime.RUNTIME_CTX_MATCH_ID).(string),
 	}
 
 	return state, tickRate, getLabel(state)
@@ -269,51 +310,26 @@ func (m *LobbyMatch) MatchLoop(ctx context.Context, logger runtime.Logger, db *s
 		broadcastLobbyUpdate(logger, state, dispatcher)
 	}
 
-	// if (state.GameState == Launching) {
-	//     if (state.serverStartResult.success !== null) {
-	//         logger.info("I should send a message to the clients now");
-	//         state.gameState = GameState.InProgress;
-	//     } else if (state.serverStartResult.error !== null) {
-	//         logger.error("Failed to start game server");
-	//         logger.error(state.serverStartResult.error.toString());
-	//         return null;
-	//     }
-	// } else if (state.gameState == GameState.WaitingForPlayersReady) {
-	//     let allReady = true;
-	//     Object.keys(state.players).forEach(sessionId => {
-	//         var player = state.players[sessionId];
-	//         if (!player.isObserving && !player.isReady) {
-	//             allReady = false;
-	//         }
-	//     });
+	if state.GameState == WaitingForPlayersReady {
+		readyCount := 0
+		for _, p := range state.Players {
+			if !p.IsObserving && p.IsReady {
+				readyCount++
+			}
+		}
 
-	//     if (allReady) {
-	//         state.canJoin = false;
-	//         state.gameState = GameState.InProgress;
+		if readyCount >= state.RequiredPlayerCount {
+			responseBytes, err := spinUpServer(state.MatchId)
+			if err != nil {
+				panic(err)
+			}
 
-	//         fetch(
-	//             "https://localhost:7152/gameserver",
-	//             {
-	//                 method: "POST",
-	//                 cache: "no-cache",
-	//                 headers: {
-	//                     "Content-Type": "application/json",
-	//                 },
-	//                 redirect: "follow",
-	//                 body: JSON.stringify({ matchId: state.matchId }), // body data type must match "Content-Type" header
-	//             })
-	//             .then(response => response.json().then(x => {
-	//                 logger.info("Success");
-	//                 logger.info(x.toString());
-	//                 state.serverStartResult.success = x;
-	//             }))
-	//             .catch(e => {
-	//                 logger.error("Failure");
-	//                 logger.error(e.toString());
-	//                 state.serverStartResult.error = e;
-	//             });
-	//     }
-	// }
+			state.GameState = InProgress
+			state.CanJoin = false
+
+			broadcastGameStarted(logger, state, dispatcher, responseBytes)
+		}
+	}
 
 	return state
 }
@@ -324,7 +340,4 @@ func (m *LobbyMatch) MatchTerminate(ctx context.Context, logger runtime.Logger, 
 
 func (m *LobbyMatch) MatchSignal(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, dispatcher runtime.MatchDispatcher, tick int64, state interface{}, data string) (interface{}, string) {
 	return state, data
-}
-
-func main() {
 }

@@ -25,6 +25,13 @@ const (
 
 // noinspection GoUnusedExportedFunction
 func InitModule(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, initializer runtime.Initializer) error {
+	body, err := spinUpServer("test")
+	if err != nil {
+		println(err.Error())
+	} else {
+		println(string(body))
+	}
+
 	initStart := time.Now()
 
 	if err := initializer.RegisterMatch("LobbyMatch", func(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule) (runtime.Match, error) {
@@ -61,6 +68,7 @@ func InitModule(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runti
 
 		params := map[string]interface{}{
 			"isPrivate": isPrivate,
+			"matchName": matchName,
 		}
 
 		// Create the match and return the match ID to the player
@@ -70,9 +78,7 @@ func InitModule(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runti
 		}
 
 		response := map[string]interface{}{
-			"matchId":   matchId,
-			"matchName": matchName,
-			"canJoin":   true,
+			"matchId": matchId,
 		}
 
 		bytes, err := json.Marshal(response)
