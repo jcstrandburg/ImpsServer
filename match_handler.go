@@ -146,6 +146,7 @@ func spinUpServer(matchId string) ([]byte, error) {
 
 	address := "http://172.21.214.52:5000/GameServer"
 	address = "http://localhost:5000/GameServer"
+	address = "http://servermanager:5000/GameServer"
 	resp, err := http.Post(address, "application/json", bytes.NewBuffer(jsonBytes))
 	if err != nil {
 		println("Error during post")
